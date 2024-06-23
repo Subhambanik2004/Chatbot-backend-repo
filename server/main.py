@@ -2,6 +2,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from langchain_google_genai import ChatGoogleGenerativeAI
+from dotenv import load_dotenv
+import os
 from typing import List
 import logging
 import asyncio
@@ -17,8 +19,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Load environment variables from .env file
+load_dotenv()
+
+# Get the Google API key from environment variables
+google_api_key = os.getenv("GOOGLE_API_KEY")
+
 # Initialize the language model with a valid API key
-llm = ChatGoogleGenerativeAI(model="models/gemini-pro", google_api_key="GOOGLE_API_KEY")
+llm = ChatGoogleGenerativeAI(model="models/gemini-pro", google_api_key=google_api_key)
 
 
 # Data model for messages
