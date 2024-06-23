@@ -11,28 +11,35 @@ app = FastAPI()
 # Allow CORS for the React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Initialize the language model with a valid API key
-llm = ChatGoogleGenerativeAI(model="models/gemini-pro", google_api_key='AIzaSyB3oBBRVbI1cw9Aj0tF_hlK5hJzKkp4EmU')
+llm = ChatGoogleGenerativeAI(model="models/gemini-pro", google_api_key="GOOGLE_API_KEY")
+
 
 # Data model for messages
 class Message(BaseModel):
     text: str
 
+
 class Response(BaseModel):
     reply: str
+
 
 # In-memory storage for conversation context
 conversation_history = []
 
+
 @app.get("/")
 async def read_root():
-    return {"message": "Welcome to the Chat API. Use the /chat endpoint to interact with the chatbot."}
+    return {
+        "message": "Welcome to the Chat API. Use the /chat endpoint to interact with the chatbot."
+    }
+
 
 @app.post("/chat", response_model=Response)
 async def chat(message: Message):
@@ -61,10 +68,13 @@ async def chat(message: Message):
         logging.error(f"An error occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.on_event("shutdown")
 async def shutdown_event():
     logging.info("Shutting down the application...")
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
