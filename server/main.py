@@ -3,10 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.memory import ConversationBufferMemory
+from langchain.memory.chat_memory import HumanMessage, AIMessage
 from dotenv import load_dotenv
 import os
 import logging
 import asyncio
+
+# Initialize logging
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
 
@@ -57,13 +61,18 @@ async def chat(message: Message):
         await asyncio.sleep(1)  # Simulating AI processing time
 
         # Add the user message to memory
-        memory.save_context({"input": message.text}, {"output": ""})
+        human_message = HumanMessage(content=message.text)
+        memory.chat_memory.add_message(human_message)
 
         # Construct the prompt for the language model
         prompt = "\n".join(
             [
-                f"Human: {context['input']}\nAI: {context['output']}"
-                for context in memory.chat_memory
+                (
+                    f"Human: {msg.content}"
+                    if isinstance(msg, HumanMessage)
+                    else f"{msg.content}"
+                )
+                for msg in memory.chat_memory.messages
             ]
         )
         logging.info(f"Generated prompt: {prompt}")
@@ -72,11 +81,15 @@ async def chat(message: Message):
         result = llm.invoke(prompt)
         logging.info(f"Model response: {result.content}")
 
-        # Update the last entry in memory with the actual response
-        memory.chat_memory[-1] = {"input": message.text, "output": result.content}
+        # Remove the "AI:" prefix if it exists
+        ai_response = result.content.replace("AI: ", "", 1)
+
+        # Add the AI's response to memory
+        ai_message = AIMessage(content=ai_response)
+        memory.chat_memory.add_message(ai_message)
 
         # Return the response as a plain string
-        return Response(reply=result.content)
+        return Response(reply=ai_response)
     except Exception as e:
         logging.error(f"An error occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -90,4 +103,4 @@ async def shutdown_event():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("server.main:app", host="0.0.0.0", port=8000, reload=True)
