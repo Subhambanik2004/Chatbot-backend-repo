@@ -5,9 +5,12 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.memory import ConversationBufferMemory
 from langchain.memory.chat_memory import HumanMessage, AIMessage
 from dotenv import load_dotenv
+from supabase import create_client, Client
 import os
 import logging
 import asyncio
+import uuid
+from datetime import datetime
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -26,8 +29,10 @@ app.add_middleware(
 # Load environment variables from .env file
 load_dotenv()
 
-# Get the Google API key from environment variables
+# Get the Google API key and Supabase URL and Key from environment variables
 google_api_key = os.getenv("GOOGLE_API_KEY")
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_key = os.getenv("SUPABASE_KEY")
 
 # Initialize the language model with a valid API key
 llm = ChatGoogleGenerativeAI(model="models/gemini-pro", google_api_key=google_api_key)
@@ -35,15 +40,8 @@ llm = ChatGoogleGenerativeAI(model="models/gemini-pro", google_api_key=google_ap
 # Initialize memory
 memory = ConversationBufferMemory()
 
-
-# Define a simple memory class to add summary attribute
-class CustomMemory:
-    def __init__(self):
-        self.summary = ""
-
-
-# Initialize the custom memory
-custom_memory = CustomMemory()
+# Initialize Supabase client
+supabase: Client = create_client(supabase_url, supabase_key)
 
 
 # Data model for messages
@@ -62,13 +60,17 @@ async def read_root():
     }
 
 
+async def simulate_ai_processing_time():
+    await asyncio.sleep(1)  # Simulating AI processing time
+
+
 @app.post("/chat", response_model=Response)
 async def chat(message: Message):
     try:
         logging.info(f"Received message: {message.text}")
 
         # Simulate "typing..." or "waiting..." indicator
-        await asyncio.sleep(1)  # Simulating AI processing time
+        await simulate_ai_processing_time()  # Simulating AI processing time
 
         # Add the user message to memory
         human_message = HumanMessage(content=message.text)
@@ -98,33 +100,37 @@ async def chat(message: Message):
         ai_message = AIMessage(content=ai_response)
         memory.chat_memory.add_message(ai_message)
 
-        # Update the conversation summary manually
-        update_conversation_summary(human_message, ai_message)
+        # Store chat history in Supabase
+        session_id = str(uuid.uuid4())
+        response = (
+            supabase.table("chat_history")
+            .insert(
+                [
+                    {
+                        "session_id": session_id,
+                        "message": message.text,
+                        "role": "human",
+                        "timestamp": datetime.utcnow().isoformat(),
+                    },
+                    {
+                        "session_id": session_id,
+                        "message": ai_response,
+                        "role": "ai",
+                        "timestamp": datetime.utcnow().isoformat(),
+                    },
+                ]
+            )
+            .execute()
+        )
+
+        if response.get("error"):
+            logging.error(f"Failed to store chat history: {response['error']}")
+            raise HTTPException(status_code=500, detail="Failed to store chat history.")
 
         # Return the response as a plain string
         return Response(reply=ai_response)
     except Exception as e:
         logging.error(f"An error occurred: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-def update_conversation_summary(human_message, ai_message):
-    # Manually update the summary memory
-    current_summary = custom_memory.summary
-    summary = (
-        f"{current_summary}\nHuman: {human_message.content}\nAI: {ai_message.content}"
-    )
-    custom_memory.summary = summary
-
-
-@app.get("/summary")
-async def get_summary():
-    try:
-        summary = custom_memory.summary  # Access the summary directly
-        logging.info(f"Conversation summary: {summary}")
-        return {"summary": summary}
-    except Exception as e:
-        logging.error(f"An error occurred while fetching the summary: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
