@@ -36,6 +36,16 @@ llm = ChatGoogleGenerativeAI(model="models/gemini-pro", google_api_key=google_ap
 memory = ConversationBufferMemory()
 
 
+# Define a simple memory class to add summary attribute
+class CustomMemory:
+    def __init__(self):
+        self.summary = ""
+
+
+# Initialize the custom memory
+custom_memory = CustomMemory()
+
+
 # Data model for messages
 class Message(BaseModel):
     text: str
@@ -88,10 +98,33 @@ async def chat(message: Message):
         ai_message = AIMessage(content=ai_response)
         memory.chat_memory.add_message(ai_message)
 
+        # Update the conversation summary manually
+        update_conversation_summary(human_message, ai_message)
+
         # Return the response as a plain string
         return Response(reply=ai_response)
     except Exception as e:
         logging.error(f"An error occurred: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def update_conversation_summary(human_message, ai_message):
+    # Manually update the summary memory
+    current_summary = custom_memory.summary
+    summary = (
+        f"{current_summary}\nHuman: {human_message.content}\nAI: {ai_message.content}"
+    )
+    custom_memory.summary = summary
+
+
+@app.get("/summary")
+async def get_summary():
+    try:
+        summary = custom_memory.summary  # Access the summary directly
+        logging.info(f"Conversation summary: {summary}")
+        return {"summary": summary}
+    except Exception as e:
+        logging.error(f"An error occurred while fetching the summary: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
