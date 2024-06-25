@@ -82,7 +82,7 @@ async def chat(message: Message):
                 (
                     f"Human: {msg.content}"
                     if isinstance(msg, HumanMessage)
-                    else f"{msg.content}"
+                    else f"AI: {msg.content}"
                 )
                 for msg in memory.chat_memory.messages
             ]
@@ -123,7 +123,10 @@ async def chat(message: Message):
             .execute()
         )
 
-        if response.get("error"):
+        # Inspect the structure of the response object
+        logging.info(f"Supabase response: {response}")
+
+        if "error" in response:
             logging.error(f"Failed to store chat history: {response['error']}")
             raise HTTPException(status_code=500, detail="Failed to store chat history.")
 
@@ -142,4 +145,4 @@ async def shutdown_event():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("server.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
