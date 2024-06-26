@@ -6,6 +6,16 @@ function App() {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
+  const [sessionId, setSessionId] = useState('');
+
+  const startNewSession = async () => {
+    try {
+      const response = await axios.post('http://localhost:8000/session');
+      setSessionId(response.data.session_id);
+    } catch (error) {
+      console.error('Error starting new session:', error);
+    }
+  };
 
   const handleSend = async () => {
     if (!message.trim()) return;
@@ -17,7 +27,7 @@ function App() {
     setMessage('');
 
     try {
-      const response = await axios.post('http://localhost:8000/chat', { text: message });
+      const response = await axios.post('http://localhost:8000/chat', { text: message, session_id: sessionId });
       const botMessage = { role: 'bot', content: response.data.reply };
       setMessages((prevMessages) => [...prevMessages, botMessage]);
     } catch (error) {
@@ -71,6 +81,9 @@ function App() {
       <Typography variant="h4" gutterBottom>
         Chatbot
       </Typography>
+      <Button variant="contained" color="primary" onClick={startNewSession} style={{ marginBottom: '10px' }}>
+        Start New Session
+      </Button>
       <Box display="flex" flexDirection="column" alignItems="stretch" minHeight="60vh" maxHeight="60vh" overflow="auto" mb={2}>
         <List>
           {messages.map((msg, index) => (

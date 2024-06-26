@@ -4,7 +4,7 @@ import traceback
 from datetime import datetime
 
 from fastapi.responses import JSONResponse
-from fastapi import APIRouter, HTTPException, Request, Header
+from fastapi import APIRouter, HTTPException, Request, Body
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -12,6 +12,7 @@ from .chat_memory import memory, HumanMessage, AIMessage
 from .database import supabase
 from .schemas import Message, chat_schema, Session
 from .utils import simulate_ai_processing_time
+from .summarizer import generate_summary  # Import the summarizer
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -39,7 +40,7 @@ async def read_root():
 
 
 @router.post("/session", response_model=Session)
-async def create_session():
+async def create_session(email_id: str = Body(..., embed=True)):
     try:
         session_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().isoformat()
@@ -51,6 +52,7 @@ async def create_session():
                     "session_id": session_id,
                     "started_at": timestamp,
                     "last_updated": timestamp,
+                    "email_id": email_id,
                 }
             )
             .execute()
@@ -58,11 +60,11 @@ async def create_session():
 
         logging.info(f"Supabase response: {response}")
 
-        if "error" in response:
-            logging.error(f"Failed to create session: {response['error']}")
+        if not response.data:
+            logging.error(f"Failed to create session: {response}")
             raise HTTPException(status_code=500, detail="Failed to create session.")
 
-        return Session(session_id=session_id)
+        return Session(session_id=session_id, email_id=email_id)
     except Exception as e:
         logging.error(f"An error occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -131,9 +133,25 @@ async def chat(request: chat_schema):
 
         logging.info(f"Supabase response: {response}")
 
-        if "error" in response:
-            logging.error(f"Failed to store chat history: {response['error']}")
+        if not response.data:
+            logging.error(f"Failed to store chat history: {response}")
             raise HTTPException(status_code=500, detail="Failed to store chat history.")
+
+        # Generate a summary for the session
+        summary = generate_summary(memory.chat_memory.messages)
+
+        # Store the summary in Supabase
+        summary_response = (
+            supabase.table("summaries")
+            .upsert(
+                {
+                    "session_id": session_id,
+                    "summary": summary,
+                }
+            )
+            .execute()
+        )
+        logging.info(f"Summary store response: {summary_response}")
 
         # Update session last updated timestamp
         update_response = (
