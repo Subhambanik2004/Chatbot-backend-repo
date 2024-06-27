@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Container, TextField, Button, List, ListItem, ListItemText, Typography, Box, Paper, Snackbar, Alert } from '@mui/material';
 
@@ -8,8 +8,15 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [sessionId, setSessionId] = useState('');
+  const [sessions, setSessions] = useState([]);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+
+  useEffect(() => {
+    if (sessionId) {
+      fetchChatHistory(sessionId);
+    }
+  }, [sessionId]);
 
   const startNewSession = async () => {
     if (!email.trim()) {
@@ -19,14 +26,30 @@ function App() {
 
     try {
       const response = await axios.post('http://localhost:8000/session', { email_id: email });
-      setSessionId(response.data.session_id);
-    } catch (error) {
-      if (error.response && error.response.status === 400) {
-        setSnackbarMessage('Email already registered');
-        setSnackbarOpen(true);
+      if (response.data.sessions) {
+        setSessions(response.data.sessions);
       } else {
-        console.error('Error starting new session:', error);
+        setSessionId(response.data.session_id);
+        setSessions([response.data]);
       }
+    } catch (error) {
+      console.error('Error starting new session:', error);
+      setSnackbarMessage('Error starting new session');
+      setSnackbarOpen(true);
+    }
+  };
+
+  const fetchChatHistory = async (sessionId) => {
+    try {
+      const response = await axios.get(`http://localhost:8000/history/${sessionId}`);
+      setMessages(response.data.map(msg => ({
+        role: msg.role === 'human' ? 'user' : 'bot',
+        content: msg.message,
+      })));
+    } catch (error) {
+      console.error('Error fetching chat history:', error);
+      setSnackbarMessage('Error fetching chat history');
+      setSnackbarOpen(true);
     }
   };
 
@@ -45,6 +68,8 @@ function App() {
       setMessages((prevMessages) => [...prevMessages, botMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
+      setSnackbarMessage('Error sending message');
+      setSnackbarOpen(true);
     } finally {
       setTyping(false);
     }
@@ -104,34 +129,52 @@ function App() {
       <Button variant="contained" color="primary" onClick={startNewSession} style={{ marginBottom: '10px' }}>
         Start New Session
       </Button>
-      <Box display="flex" flexDirection="column" alignItems="stretch" minHeight="60vh" maxHeight="60vh" overflow="auto" mb={2}>
-        <List>
-          {messages.map((msg, index) => (
-            <ListItem key={index} style={{ display: 'flex', justifyContent: msg.role === 'bot' ? 'flex-start' : 'flex-end' }}>
-              <ListItemText primary={formatMessageContent(msg.role, msg.content)} />
-            </ListItem>
-          ))}
-          {typing && (
-            <ListItem style={{ display: 'flex', justifyContent: 'flex-start' }}>
-              <ListItemText
-                primary={<Typography variant="body1" component="div" style={{ fontStyle: 'italic' }}>Typing...</Typography>}
-              />
-            </ListItem>
-          )}
-        </List>
+      <Box display="flex">
+        <Box flex={1} mr={2}>
+          <Typography variant="h6">Sessions</Typography>
+          <List>
+            {sessions.map((session) => (
+              <ListItem
+                key={session.session_id}
+                button
+                onClick={() => setSessionId(session.session_id)}
+              >
+                <ListItemText primary={`Session started at: ${session.started_at}`} />
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+        <Box flex={3}>
+          <Box display="flex" flexDirection="column" alignItems="stretch" minHeight="60vh" maxHeight="60vh" overflow="auto" mb={2}>
+            <List>
+              {messages.map((msg, index) => (
+                <ListItem key={index} style={{ display: 'flex', justifyContent: msg.role === 'bot' ? 'flex-start' : 'flex-end' }}>
+                  <ListItemText primary={formatMessageContent(msg.role, msg.content)} />
+                </ListItem>
+              ))}
+              {typing && (
+                <ListItem style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                  <ListItemText
+                    primary={<Typography variant="body1" component="div" style={{ fontStyle: 'italic' }}>Typing...</Typography>}
+                  />
+                </ListItem>
+              )}
+            </List>
+          </Box>
+          <TextField
+            label="Type your message"
+            fullWidth
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter') handleSend();
+            }}
+          />
+          <Button variant="contained" color="primary" onClick={handleSend} style={{ marginTop: '10px' }}>
+            Send
+          </Button>
+        </Box>
       </Box>
-      <TextField
-        label="Type your message"
-        fullWidth
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        onKeyPress={(e) => {
-          if (e.key === 'Enter') handleSend();
-        }}
-      />
-      <Button variant="contained" color="primary" onClick={handleSend} style={{ marginTop: '10px' }}>
-        Send
-      </Button>
       <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={() => setSnackbarOpen(false)}>
         <Alert onClose={() => setSnackbarOpen(false)} severity="error" sx={{ width: '100%' }}>
           {snackbarMessage}

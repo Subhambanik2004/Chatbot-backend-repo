@@ -17,3 +17,9 @@ class Session(BaseModel):
 
 class SessionCreate(BaseModel):
     email_id: str  # New schema for session creation
+
+
+class SessionResponse(BaseModel):
+    session_id: str
+    email_id: str
+    started_at: str

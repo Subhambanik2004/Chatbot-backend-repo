@@ -63,6 +63,14 @@ async def read_root():
 @router.post("/session", response_model=Session)
 async def create_session(email_id: str = Body(..., embed=True)):
     try:
+        existing_sessions = (
+            supabase.table("sessions").select("*").eq("email_id", email_id).execute()
+        )
+        if existing_sessions.data:
+            return JSONResponse(
+                content={"sessions": existing_sessions.data}, status_code=200
+            )
+
         session_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().isoformat()
 
@@ -153,7 +161,7 @@ async def chat(request: chat_schema):
             raise HTTPException(status_code=500, detail="Failed to store chat history.")
 
         # Generate a summary for the session
-        summary = memory.load_memory_variables({"input": request.text})["history"]
+        summary = memory.load_memory_variables({"input": ""})["history"]
 
         # Store the summary in Supabase
         summary_response = (
@@ -183,3 +191,25 @@ async def chat(request: chat_schema):
         error_message = {"detail": f"An error occurred: {str(e)}"}
         logging.critical(error_message)
         return JSONResponse(content=error_message, status_code=500)
+
+
+@router.get("/history/{session_id}")
+async def get_history(session_id: str):
+    try:
+        response = (
+            supabase.table("chat_history")
+            .select("*")
+            .eq("session_id", session_id)
+            .order("timestamp")
+            .execute()
+        )
+
+        if not response.data:
+            raise HTTPException(
+                status_code=404, detail="No chat history found for this session ID."
+            )
+
+        return response.data
+    except Exception as e:
+        logging.error(f"An error occurred: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
