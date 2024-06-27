@@ -1,18 +1,22 @@
+import os
 import uuid
 import logging
 import traceback
 from datetime import datetime
 
+from fastapi import APIRouter, HTTPException, Body
 from fastapi.responses import JSONResponse
-from fastapi import APIRouter, HTTPException, Request, Body
 
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.memory import ConversationSummaryMemory
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
 
-from .chat_memory import memory, HumanMessage, AIMessage
+from langchain_community.chat_message_histories import PostgresChatMessageHistory
+
 from .database import supabase
 from .schemas import Message, chat_schema, Session
 from .utils import simulate_ai_processing_time
-from .summarizer import generate_summary  # Import the summarizer
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -20,7 +24,6 @@ logging.basicConfig(level=logging.INFO)
 router = APIRouter()
 
 # Load environment variables
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -30,6 +33,24 @@ google_api_key = os.getenv("GOOGLE_API_KEY")
 
 # Initialize the language model with a valid API key
 llm = ChatGoogleGenerativeAI(model="models/gemini-pro", google_api_key=google_api_key)
+
+# Define the prompt template
+prompt = PromptTemplate(
+    input_variables=["human_message"], template="Human: {human_message}\nAI:"
+)
+
+# Setup PostgresChatMessageHistory
+connection_string = os.getenv("POSTGRES_CONNECTION_STRING")
+
+
+def get_summary_memory(llm, chat_memory, memory_key="history", input_key="question"):
+    return ConversationSummaryMemory(
+        llm=llm, memory_key=memory_key, input_key=input_key, chat_memory=chat_memory
+    )
+
+
+def get_llm_chain(llm, memory, prompt, verbose=False):
+    return LLMChain(llm=llm, memory=memory, verbose=verbose, prompt=prompt)
 
 
 @router.get("/")
@@ -81,33 +102,27 @@ async def chat(request: chat_schema):
         # Simulate "typing..." or "waiting..." indicator
         await simulate_ai_processing_time()
 
-        # Add the user message to memory
-        human_message = HumanMessage(content=request.text)
-        memory.chat_memory.add_message(human_message)
-
-        # Construct the prompt for the language model
-        prompt = "\n".join(
-            [
-                (
-                    f"Human: {msg.content}"
-                    if isinstance(msg, HumanMessage)
-                    else f"AI: {msg.content}"
-                )
-                for msg in memory.chat_memory.messages
-            ]
+        # Initialize PostgresChatMessageHistory
+        chat_history = PostgresChatMessageHistory(
+            connection_string=connection_string, session_id=session_id
         )
-        logging.info(f"Generated prompt: {prompt}")
+
+        # Initialize ConversationSummaryMemory with the LLM
+        memory = get_summary_memory(llm=llm, chat_memory=chat_history)
+
+        # Add the user message to memory
+        memory.chat_memory.add_user_message(request.text)
+
+        # Create an LLMChain with the memory and prompt
+        chain = get_llm_chain(llm=llm, memory=memory, prompt=prompt)
 
         # Generate a response from the language model
-        result = llm.invoke(prompt)
-        logging.info(f"Model response: {result.content}")
-
-        # Remove the "AI:" prefix if it exists
-        ai_response = result.content.replace("AI: ", "", 1)
+        result = chain.invoke({"human_message": request.text, "question": request.text})
+        ai_response = result["text"] if isinstance(result, dict) else result
+        logging.info(f"Model response: {ai_response}")
 
         # Add the AI's response to memory
-        ai_message = AIMessage(content=ai_response)
-        memory.chat_memory.add_message(ai_message)
+        memory.chat_memory.add_ai_message(ai_response)
 
         # Store chat history in Supabase
         response = (
@@ -138,7 +153,7 @@ async def chat(request: chat_schema):
             raise HTTPException(status_code=500, detail="Failed to store chat history.")
 
         # Generate a summary for the session
-        summary = generate_summary(memory.chat_memory.messages)
+        summary = memory.load_memory_variables({"input": request.text})["history"]
 
         # Store the summary in Supabase
         summary_response = (

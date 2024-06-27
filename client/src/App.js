@@ -1,19 +1,32 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { Container, TextField, Button, List, ListItem, ListItemText, Typography, Box, Paper } from '@mui/material';
+import { Container, TextField, Button, List, ListItem, ListItemText, Typography, Box, Paper, Snackbar, Alert } from '@mui/material';
 
 function App() {
+  const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [sessionId, setSessionId] = useState('');
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
   const startNewSession = async () => {
+    if (!email.trim()) {
+      alert('Please enter an email');
+      return;
+    }
+
     try {
-      const response = await axios.post('http://localhost:8000/session');
+      const response = await axios.post('http://localhost:8000/session', { email_id: email });
       setSessionId(response.data.session_id);
     } catch (error) {
-      console.error('Error starting new session:', error);
+      if (error.response && error.response.status === 400) {
+        setSnackbarMessage('Email already registered');
+        setSnackbarOpen(true);
+      } else {
+        console.error('Error starting new session:', error);
+      }
     }
   };
 
@@ -81,6 +94,13 @@ function App() {
       <Typography variant="h4" gutterBottom>
         Chatbot
       </Typography>
+      <TextField
+        label="Email"
+        fullWidth
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        style={{ marginBottom: '10px' }}
+      />
       <Button variant="contained" color="primary" onClick={startNewSession} style={{ marginBottom: '10px' }}>
         Start New Session
       </Button>
@@ -112,6 +132,11 @@ function App() {
       <Button variant="contained" color="primary" onClick={handleSend} style={{ marginTop: '10px' }}>
         Send
       </Button>
+      <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={() => setSnackbarOpen(false)}>
+        <Alert onClose={() => setSnackbarOpen(false)} severity="error" sx={{ width: '100%' }}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 }
