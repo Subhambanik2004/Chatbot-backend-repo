@@ -1,14 +1,14 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api import router
+from .api import router
 import logging
 import sys
 
 # Initialize logging
 logging.basicConfig(level=logging.DEBUG)  # Change to DEBUG level for more details
 
-app = FastAPI()
+app: FastAPI = FastAPI()
 
 # Allow CORS for the React frontend
 app.add_middleware(
@@ -24,11 +24,10 @@ app.include_router(router)
 
 
 @app.on_event("shutdown")
-async def shutdown_event():
+async def shutdown_event() -> None:
+    """Logs a message when the application is shutting down."""
     logging.info("Shutting down the application...")
 
 
 if __name__ == "__main__":
-    import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

@@ -5,7 +5,6 @@ import traceback
 from datetime import datetime
 from typing import List
 
-
 from fastapi import APIRouter, HTTPException, Body
 from fastapi.responses import JSONResponse
 
@@ -23,7 +22,7 @@ from .utils import simulate_ai_processing_time
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
 
-router = APIRouter()
+router: APIRouter = APIRouter()
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -31,42 +30,58 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Get the Google API key
-google_api_key = os.getenv("GOOGLE_API_KEY")
+google_api_key: str = os.getenv("GOOGLE_API_KEY")
 
 # Initialize the language model with a valid API key
-llm = ChatGoogleGenerativeAI(model="models/gemini-pro", google_api_key=google_api_key)
+llm: ChatGoogleGenerativeAI = ChatGoogleGenerativeAI(
+    model="models/gemini-pro", google_api_key=google_api_key
+)
 
 # Define the prompt template
-prompt = PromptTemplate(
+prompt: PromptTemplate = PromptTemplate(
     input_variables=["human_message"], template="Human: {human_message}\nAI:"
 )
 
 # Setup PostgresChatMessageHistory
-connection_string = os.getenv("POSTGRES_CONNECTION_STRING")
+connection_string: str = os.getenv("POSTGRES_CONNECTION_STRING")
 
 
-def get_summary_memory(llm, chat_memory, memory_key="history", input_key="question"):
+def get_summary_memory(
+    llm: ChatGoogleGenerativeAI,
+    chat_memory: PostgresChatMessageHistory,
+    memory_key: str = "history",
+    input_key: str = "question",
+) -> ConversationSummaryMemory:
+    """Returns a ConversationSummaryMemory instance."""
     return ConversationSummaryMemory(
         llm=llm, memory_key=memory_key, input_key=input_key, chat_memory=chat_memory
     )
 
 
-def get_llm_chain(llm, memory, prompt, verbose=False):
+def get_llm_chain(
+    llm: ChatGoogleGenerativeAI,
+    memory: ConversationSummaryMemory,
+    prompt: PromptTemplate,
+    verbose: bool = False,
+) -> LLMChain:
+    """Returns an LLMChain instance."""
     return LLMChain(llm=llm, memory=memory, verbose=verbose, prompt=prompt)
 
 
 @router.get("/")
-async def read_root():
+async def read_root() -> dict:
+    """Root endpoint that provides a welcome message."""
     return {
         "message": "Welcome to the Chat API. Use the /chat endpoint to interact with the chatbot."
     }
 
 
 @router.post("/session", response_model=Session)
-async def create_session(email_id: str = Body(..., embed=True)):
+async def create_session(email_id: str = Body(..., embed=True)) -> JSONResponse:
+    """Creates a new chat session."""
     try:
-        session_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat()
+        session_id: str = str(uuid.uuid4())
+        timestamp: str = datetime.utcnow().isoformat()
 
         response = (
             supabase.table("sessions")
@@ -87,7 +102,7 @@ async def create_session(email_id: str = Body(..., embed=True)):
             logging.error(f"Failed to create session: {response}")
             raise HTTPException(status_code=500, detail="Failed to create session.")
 
-        new_session = {
+        new_session: dict = {
             "session_id": session_id,
             "email_id": email_id,
             "started_at": timestamp,
@@ -100,7 +115,8 @@ async def create_session(email_id: str = Body(..., embed=True)):
 
 
 @router.get("/sessions/{email_id}", response_model=List[Session])
-async def get_sessions(email_id: str):
+async def get_sessions(email_id: str) -> JSONResponse:
+    """Fetches all sessions for a given email ID."""
     try:
         response = (
             supabase.table("sessions").select("*").eq("email_id", email_id).execute()
@@ -116,34 +132,36 @@ async def get_sessions(email_id: str):
 
 
 @router.post("/chat")
-async def chat(request: chat_schema):
+async def chat(request: chat_schema) -> dict:
+    """Handles chat requests and generates responses from the language model."""
     try:
         logging.info(f"Received message: {request.text}")
 
-        session_id = request.session_id
+        session_id: str = request.session_id
         logging.info(f"Using session ID: {session_id}")
 
         # Simulate "typing..." or "waiting..." indicator
-        # await simulate_ai_processing_time()
+        await simulate_ai_processing_time()
 
         # Initialize PostgresChatMessageHistory
-        # make it a function
-        chat_history = PostgresChatMessageHistory(
+        chat_history: PostgresChatMessageHistory = PostgresChatMessageHistory(
             connection_string=connection_string, session_id=session_id
         )
 
         # Initialize ConversationSummaryMemory with the LLM
-        memory = get_summary_memory(llm=llm, chat_memory=chat_history)
+        memory: ConversationSummaryMemory = get_summary_memory(
+            llm=llm, chat_memory=chat_history
+        )
 
         # Add the user message to memory
         memory.chat_memory.add_user_message(request.text)
 
         # Create an LLMChain with the memory and prompt
-        chain = get_llm_chain(llm=llm, memory=memory, prompt=prompt)
+        chain: LLMChain = get_llm_chain(llm=llm, memory=memory, prompt=prompt)
 
         # Generate a response from the language model
         result = chain.invoke({"human_message": request.text, "question": request.text})
-        ai_response = result["text"] if isinstance(result, dict) else result
+        ai_response: str = result["text"] if isinstance(result, dict) else result
         logging.info(f"Model response: {ai_response}")
 
         # Add the AI's response to memory
@@ -177,22 +195,6 @@ async def chat(request: chat_schema):
             logging.error(f"Failed to store chat history: {response}")
             raise HTTPException(status_code=500, detail="Failed to store chat history.")
 
-        # Generate a summary for the session
-        # summary = memory.load_memory_variables({"input": ""})["history"]
-
-        # Store the summary in Supabase
-        # summary_response = (
-        #     supabase.table("summaries")
-        #     .upsert(
-        #         {
-        #             "session_id": session_id,
-        #             "summary": summary,
-        #         }
-        #     )
-        #     .execute()
-        # )
-        # logging.info(f"Summary store response: {summary_response}")
-
         # Update session last updated timestamp
         update_response = (
             supabase.table("sessions")
@@ -211,7 +213,8 @@ async def chat(request: chat_schema):
 
 
 @router.get("/history/{session_id}")
-async def get_history(session_id: str):
+async def get_history(session_id: str) -> list:
+    """Fetches the chat history for a given session ID."""
     try:
         logging.info(f"Fetching history for session_id: {session_id}")
         response = (

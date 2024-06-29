@@ -2,11 +2,13 @@ import asyncio
 import uuid
 
 
-async def simulate_ai_processing_time():
-    await asyncio.sleep(1)  # Simulating AI processing time
+async def simulate_ai_processing_time() -> None:
+    """Simulates AI processing time by sleeping for 1 second."""
+    await asyncio.sleep(1)
 
 
 def generate_unique_session_id() -> str:
+    """Generates a unique session ID."""
     return str(uuid.uuid4())
 
 
