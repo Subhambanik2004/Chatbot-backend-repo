@@ -3,6 +3,8 @@ import uuid
 import logging
 import traceback
 from datetime import datetime
+from typing import List
+
 
 from fastapi import APIRouter, HTTPException, Body
 from fastapi.responses import JSONResponse
@@ -63,14 +65,6 @@ async def read_root():
 @router.post("/session", response_model=Session)
 async def create_session(email_id: str = Body(..., embed=True)):
     try:
-        existing_sessions = (
-            supabase.table("sessions").select("*").eq("email_id", email_id).execute()
-        )
-        if existing_sessions.data:
-            return JSONResponse(
-                content={"sessions": existing_sessions.data}, status_code=200
-            )
-
         session_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().isoformat()
 
@@ -93,7 +87,29 @@ async def create_session(email_id: str = Body(..., embed=True)):
             logging.error(f"Failed to create session: {response}")
             raise HTTPException(status_code=500, detail="Failed to create session.")
 
-        return Session(session_id=session_id, email_id=email_id)
+        new_session = {
+            "session_id": session_id,
+            "email_id": email_id,
+            "started_at": timestamp,
+        }
+
+        return JSONResponse(content=new_session, status_code=200)
+    except Exception as e:
+        logging.error(f"An error occurred: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sessions/{email_id}", response_model=List[Session])
+async def get_sessions(email_id: str):
+    try:
+        response = (
+            supabase.table("sessions").select("*").eq("email_id", email_id).execute()
+        )
+
+        if not response.data:
+            raise HTTPException(status_code=404, detail="No sessions found.")
+
+        return JSONResponse(content=response.data, status_code=200)
     except Exception as e:
         logging.error(f"An error occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -108,9 +124,10 @@ async def chat(request: chat_schema):
         logging.info(f"Using session ID: {session_id}")
 
         # Simulate "typing..." or "waiting..." indicator
-        await simulate_ai_processing_time()
+        # await simulate_ai_processing_time()
 
         # Initialize PostgresChatMessageHistory
+        # make it a function
         chat_history = PostgresChatMessageHistory(
             connection_string=connection_string, session_id=session_id
         )
@@ -161,20 +178,20 @@ async def chat(request: chat_schema):
             raise HTTPException(status_code=500, detail="Failed to store chat history.")
 
         # Generate a summary for the session
-        summary = memory.load_memory_variables({"input": ""})["history"]
+        # summary = memory.load_memory_variables({"input": ""})["history"]
 
         # Store the summary in Supabase
-        summary_response = (
-            supabase.table("summaries")
-            .upsert(
-                {
-                    "session_id": session_id,
-                    "summary": summary,
-                }
-            )
-            .execute()
-        )
-        logging.info(f"Summary store response: {summary_response}")
+        # summary_response = (
+        #     supabase.table("summaries")
+        #     .upsert(
+        #         {
+        #             "session_id": session_id,
+        #             "summary": summary,
+        #         }
+        #     )
+        #     .execute()
+        # )
+        # logging.info(f"Summary store response: {summary_response}")
 
         # Update session last updated timestamp
         update_response = (
@@ -196,6 +213,7 @@ async def chat(request: chat_schema):
 @router.get("/history/{session_id}")
 async def get_history(session_id: str):
     try:
+        logging.info(f"Fetching history for session_id: {session_id}")
         response = (
             supabase.table("chat_history")
             .select("*")
@@ -205,11 +223,15 @@ async def get_history(session_id: str):
         )
 
         if not response.data:
+            logging.warning(f"No chat history found for session ID: {session_id}")
             raise HTTPException(
                 status_code=404, detail="No chat history found for this session ID."
             )
 
+        logging.info(f"History data: {response.data}")
         return response.data
     except Exception as e:
-        logging.error(f"An error occurred: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"An error occurred: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500, detail="An internal server error occurred."
+        )

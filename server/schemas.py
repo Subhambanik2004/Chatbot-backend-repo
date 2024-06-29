@@ -12,11 +12,11 @@ class chat_schema(BaseModel):
 
 class Session(BaseModel):
     session_id: str
-    email_id: str  # Add this line
+    email_id: str
 
 
 class SessionCreate(BaseModel):
-    email_id: str  # New schema for session creation
+    email_id: str
 
 
 class SessionResponse(BaseModel):

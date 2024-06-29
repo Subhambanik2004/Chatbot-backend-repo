@@ -1,6 +1,5 @@
 import asyncio
 import uuid
-from fastapi import Request, HTTPException
 
 
 async def simulate_ai_processing_time():

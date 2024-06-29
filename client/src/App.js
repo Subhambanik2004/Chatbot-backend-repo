@@ -18,6 +18,22 @@ function App() {
     }
   }, [sessionId]);
 
+  const fetchSessions = async () => {
+    if (!email.trim()) {
+      alert('Please enter an email');
+      return;
+    }
+
+    try {
+      const response = await axios.get(`http://localhost:8000/sessions/${email}`);
+      setSessions(response.data);
+    } catch (error) {
+      console.error('Error fetching sessions:', error);
+      setSnackbarMessage('Error fetching sessions');
+      setSnackbarOpen(true);
+    }
+  };
+
   const startNewSession = async () => {
     if (!email.trim()) {
       alert('Please enter an email');
@@ -26,12 +42,10 @@ function App() {
 
     try {
       const response = await axios.post('http://localhost:8000/session', { email_id: email });
-      if (response.data.sessions) {
-        setSessions(response.data.sessions);
-      } else {
-        setSessionId(response.data.session_id);
-        setSessions([response.data]);
-      }
+      const newSession = response.data;
+      setSessions((prevSessions) => [...prevSessions, newSession]);
+      setSessionId(newSession.session_id);
+      setMessages([]);
     } catch (error) {
       console.error('Error starting new session:', error);
       setSnackbarMessage('Error starting new session');
@@ -114,22 +128,30 @@ function App() {
     );
   };
 
+
   return (
     <Container maxWidth="sm">
       <Typography variant="h4" gutterBottom>
         Chatbot
       </Typography>
-      <TextField
-        label="Email"
-        fullWidth
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        style={{ marginBottom: '10px' }}
-      />
-      <Button variant="contained" color="primary" onClick={startNewSession} style={{ marginBottom: '10px' }}>
-        Start New Session
-      </Button>
-      <Box display="flex">
+
+      <Box borderBottom={1} mb={2}>
+        <TextField
+          label="Email"
+          fullWidth
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ marginBottom: '10px' }}
+        />
+        <Button variant="contained" color="primary" onClick={fetchSessions} style={{ marginBottom: '10px', marginRight: '10px' }}>
+          Show Sessions
+        </Button>
+        <Button variant="contained" color="primary" onClick={startNewSession} style={{ marginBottom: '10px' }}>
+          Start New Session
+        </Button>
+      </Box>
+
+      <Box display="flex" mb={2} borderBottom={1} pb={2}>
         <Box flex={1} mr={2}>
           <Typography variant="h6">Sessions</Typography>
           <List>
@@ -144,8 +166,9 @@ function App() {
             ))}
           </List>
         </Box>
+
         <Box flex={3}>
-          <Box display="flex" flexDirection="column" alignItems="stretch" minHeight="60vh" maxHeight="60vh" overflow="auto" mb={2}>
+          <Box display="flex" flexDirection="column" alignItems="stretch" minHeight="60vh" maxHeight="60vh" overflow="auto" mb={2} borderBottom={1} pb={2}>
             <List>
               {messages.map((msg, index) => (
                 <ListItem key={index} style={{ display: 'flex', justifyContent: msg.role === 'bot' ? 'flex-start' : 'flex-end' }}>
@@ -161,22 +184,33 @@ function App() {
               )}
             </List>
           </Box>
-          <TextField
-            label="Type your message"
-            fullWidth
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter') handleSend();
-            }}
-          />
-          <Button variant="contained" color="primary" onClick={handleSend} style={{ marginTop: '10px' }}>
-            Send
-          </Button>
+
+          <Box display="flex" flexDirection="column">
+            <TextField
+              label="Type your message"
+              fullWidth
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleSend();
+                }
+              }}
+              style={{ marginBottom: '10px' }}
+            />
+            <Button variant="contained" color="primary" onClick={handleSend}>
+              Send
+            </Button>
+          </Box>
         </Box>
       </Box>
-      <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={() => setSnackbarOpen(false)}>
-        <Alert onClose={() => setSnackbarOpen(false)} severity="error" sx={{ width: '100%' }}>
+
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+      >
+        <Alert onClose={() => setSnackbarOpen(false)} severity="error">
           {snackbarMessage}
         </Alert>
       </Snackbar>
