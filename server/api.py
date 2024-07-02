@@ -1,18 +1,20 @@
 import os
+import tempfile
 import uuid
 import logging
 import traceback
 from datetime import datetime
 from typing import List
+import json
 
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, File, UploadFile
 from fastapi.responses import JSONResponse
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain.memory import ConversationSummaryMemory
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
-
+from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.chat_message_histories import PostgresChatMessageHistory
 
 from .database import supabase
@@ -45,6 +47,8 @@ prompt: PromptTemplate = PromptTemplate(
 # Setup PostgresChatMessageHistory
 connection_string: str = os.getenv("POSTGRES_CONNECTION_STRING")
 
+embeddings_model = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+
 
 def get_summary_memory(
     llm: ChatGoogleGenerativeAI,
@@ -66,6 +70,14 @@ def get_llm_chain(
 ) -> LLMChain:
     """Returns an LLMChain instance."""
     return LLMChain(llm=llm, memory=memory, verbose=verbose, prompt=prompt)
+
+
+def should_query_pdfs(message: str) -> bool:
+    """Determines if the message requires querying PDFs."""
+    # Define a list of keywords or phrases that might indicate the need to query PDFs
+    keywords = ["document", "PDF", "file", "report"]
+    # Check if any keyword is present in the message
+    return any(keyword in message.lower() for keyword in keywords)
 
 
 @router.get("/")
@@ -141,7 +153,7 @@ async def chat(request: chat_schema) -> dict:
         logging.info(f"Using session ID: {session_id}")
 
         # Simulate "typing..." or "waiting..." indicator
-        await simulate_ai_processing_time()
+        # await simulate_ai_processing_time()
 
         # Initialize PostgresChatMessageHistory
         chat_history: PostgresChatMessageHistory = PostgresChatMessageHistory(
@@ -163,6 +175,19 @@ async def chat(request: chat_schema) -> dict:
         result = chain.invoke({"human_message": request.text, "question": request.text})
         ai_response: str = result["text"] if isinstance(result, dict) else result
         logging.info(f"Model response: {ai_response}")
+
+        # Check if the message requires querying PDFs
+        vector_store_used = False
+        if should_query_pdfs(request.text):
+            # Query the vector store for related documents
+            pdf_responses = await query_pdf(request.text)
+
+            # If there are relevant PDFs, add them to the response
+            if pdf_responses:
+                vector_store_used = True
+                ai_response += "\n\nI found some relevant information in the following documents:\n"
+                for response in pdf_responses:
+                    ai_response += f"- {response}\n"
 
         # Add the AI's response to memory
         memory.chat_memory.add_ai_message(ai_response)
@@ -204,7 +229,7 @@ async def chat(request: chat_schema) -> dict:
         )
         logging.info(f"Session update response: {update_response}")
 
-        return {"reply": ai_response}
+        return {"reply": ai_response, "vector_store_used": vector_store_used}
     except Exception as e:
         traceback.print_exc()
         error_message = {"detail": f"An error occurred: {str(e)}"}
@@ -226,15 +251,98 @@ async def get_history(session_id: str) -> list:
         )
 
         if not response.data:
-            logging.warning(f"No chat history found for session ID: {session_id}")
-            raise HTTPException(
-                status_code=404, detail="No chat history found for this session ID."
-            )
+            logging.warning(f"No chat history found for session_id: {session_id}")
+            raise HTTPException(status_code=404, detail="Chat history not found.")
 
-        logging.info(f"History data: {response.data}")
         return response.data
+    except Exception as e:
+        error_message = {"detail": f"An error occurred: {str(e)}"}
+        logging.error(error_message)
+        return JSONResponse(content=error_message, status_code=500)
+
+
+# def get_embedding(document_content: str) -> List[float]:
+#     """Generate embeddings using Google Generative AI Embeddings."""
+#     # Initialize embeddings model
+#     embeddings_model = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+
+#     # Generate embeddings for the document content
+#     embedding = embeddings_model.embed([document_content])[0]
+
+#     return embedding
+
+
+@router.post("/add_pdf")
+async def add_pdf(file: UploadFile = File(...)) -> dict:
+    """Adds a PDF to the document store and generates embeddings."""
+    temp_file_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+            temp_file_path = temp_file.name
+            temp_file.write(file.file.read())
+
+        # Load the document
+        loader = PyPDFLoader(file_path=temp_file_path, extract_images=True)
+        pages = loader.load_and_split()
+
+        # Initialize an empty list to store documents data
+        documents_to_insert = []
+
+        # Process each page in the PDF
+        for page in pages:
+            document_id = str(uuid.uuid4())
+            document_content = page.page_content
+            document_metadata = json.dumps(page.metadata)
+
+            # Generate embeddings for the document content
+            embedding = embeddings_model.embed_documents([document_content])[0]
+
+            # Prepare document data for insertion
+            document_data = {
+                "id": document_id,
+                "content": document_content,
+                "metadata": document_metadata,
+                "embedding": embedding,
+            }
+
+            # Append document data to the list
+            documents_to_insert.append(document_data)
+
+        # Insert all documents in one batch operation
+        response = supabase.table("documents").insert(documents_to_insert).execute()
+
+        # Check if insertion was successful
+        if not response.data:
+            logging.error("Error inserting documents")
+            raise HTTPException(status_code=500, detail="Error inserting documents.")
+
+        return {"status": "PDF added successfully"}
+
     except Exception as e:
         logging.error(f"An error occurred: {traceback.format_exc()}")
         raise HTTPException(
-            status_code=500, detail="An internal server error occurred."
+            status_code=500, detail="An error occurred while adding the PDF."
         )
+
+    finally:
+        # Clean up the temporary file
+        if temp_file_path:
+            os.remove(temp_file_path)
+
+
+async def query_pdf(query: str) -> list:
+    """Query the vector store for relevant documents."""
+    try:
+        query_embedding = embeddings_model.embed([query])[0]  # Use the embed method
+
+        response = supabase.rpc(
+            "match_documents", {"query_embedding": query_embedding}
+        ).execute()
+
+        if not response.data:
+            return []
+
+        return [doc["content"] for doc in response.data]
+    except Exception as e:
+        logging.error(f"Error querying PDFs: {traceback.format_exc()}")
+        return []

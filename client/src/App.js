@@ -56,10 +56,15 @@ function App() {
   const fetchChatHistory = async (sessionId) => {
     try {
       const response = await axios.get(`http://localhost:8000/history/${sessionId}`);
-      setMessages(response.data.map(msg => ({
-        role: msg.role === 'human' ? 'user' : 'bot',
-        content: msg.message,
-      })));
+      if (response.data.length === 0) {
+        // No chat history found, reset messages
+        setMessages([]);
+      } else {
+        setMessages(response.data.map(msg => ({
+          role: msg.role === 'human' ? 'user' : 'bot',
+          content: msg.message,
+        })));
+      }
     } catch (error) {
       console.error('Error fetching chat history:', error);
       setSnackbarMessage('Error fetching chat history');
@@ -128,7 +133,6 @@ function App() {
     );
   };
 
-
   return (
     <Container maxWidth="sm">
       <Typography variant="h4" gutterBottom>
@@ -159,7 +163,11 @@ function App() {
               <ListItem
                 key={session.session_id}
                 button
-                onClick={() => setSessionId(session.session_id)}
+                onClick={() => {
+                  setSessionId(session.session_id);
+                  setMessages([]); // Clear messages before loading new session
+                  fetchChatHistory(session.session_id);
+                }}
               >
                 <ListItemText primary={`Session started at: ${session.started_at}`} />
               </ListItem>
