@@ -189,11 +189,8 @@ const ChatPage = () => {
 
 
                 console.log("API Base URL:", process.env.REACT_APP_FASTAPI_BASEURL);
-                const baseUrl = process.env.REACT_APP_FASTAPI_BASEURL.endsWith('/')
-                    ? process.env.REACT_APP_FASTAPI_BASEURL
-                    : `${process.env.REACT_APP_FASTAPI_BASEURL}/`;
-                console.log(`${baseUrl}/add_pdf/${sessionId}`);
-                const response = await axios.post(`${baseUrl}add_pdf/${sessionId}`,
+                console.log(`${process.env.REACT_APP_FASTAPI_BASEURL}add_pdf/${sessionId}`);
+                const response = await axios.post(`${process.env.REACT_APP_FASTAPI_BASEURL}add_pdf/${sessionId}`,
                     formData,
                     {
                         headers: {
