@@ -190,9 +190,8 @@ const ChatPage = () => {
 
                 console.log("API Base URL:", process.env.REACT_APP_FASTAPI_BASEURL);
 
-                const baseURL = `${process.env.REACT_APP_FASTAPI_BASEURL}/`.replace(/\/+$/, '/'); // Ensures single trailing slash
-                const response = await axios.post(
-                    `${baseURL}add_pdf/${sessionId}`,
+
+                const response = await axios.post(`${process.env.REACT_APP_FASTAPI_BASEURL}add_pdf/${sessionId}`,
                     formData,
                     {
                         headers: {
