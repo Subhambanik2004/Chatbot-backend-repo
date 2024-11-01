@@ -78,23 +78,63 @@ const ChatPage = () => {
     }, [sidebarOpen]);
 
     const fetchMessagesForSession = async (sessionId) => {
-        const { data, error } = await supabase
-            .from('chat_history')
-            .select('*')
-            .eq('session_id', sessionId)
-            .order('timestamp', { ascending: true });
+        console.log('Fetching messages for session ID:', sessionId); // Debug log
 
-        if (error) {
-            console.error('Error fetching chat messages:', error);
-        } else {
+        if (!sessionId) {
+            console.warn('No session ID provided.'); // Check if sessionId is valid
+            return;
+        }
+
+        try {
+            // Get session details to check document_ids
+            const { data: sessionData, error: sessionError } = await supabase
+                .from('sessions')
+                .select('document_ids')
+                .eq('session_id', sessionId)
+                .single();
+
+            if (sessionError) {
+                console.error('Error fetching session details:', sessionError);
+                return;
+            }
+
+            // Check if document_ids is empty or null
+            if (!sessionData.document_ids || sessionData.document_ids.length === 0) {
+                setShowUploadModal(true); // Show upload modal if no documents are present
+                setActiveSessionId(sessionId); // Set active session ID in case modal needs it
+                return; // Exit if we need to upload documents first
+            }
+
+            // Fetch chat messages for the session
+            const { data, error } = await supabase
+                .from('chat_history')
+                .select('message, role, timestamp')
+                .eq('session_id', sessionId)
+                .order('timestamp', { ascending: true });
+
+            if (error) {
+                console.error('Error fetching chat messages:', error);
+                setMessages([]); // Clear messages on error
+                return;
+            }
+
             setMessages(data.map(msg => ({
                 id: msg.id,
                 text: msg.message,
                 isUser: msg.role === 'human',
                 timestamp: msg.timestamp,
             })));
+        } catch (e) {
+            console.error('Exception fetching messages:', e);
+            setMessages([]); // Clear messages on exception
         }
     };
+
+    useEffect(() => {
+        if (activeSessionId) {
+            fetchMessagesForSession(activeSessionId);
+        }
+    }, [activeSessionId]);
 
     const handleNewChat = async () => {
         const { data: { user } } = await supabase.auth.getUser();
@@ -128,51 +168,65 @@ const ChatPage = () => {
 
     const handleFileUpload = async (event) => {
         const files = event.target.files;
+
+        // Proceed only if files are selected
         if (files.length) {
-            const { data: { session } } = await supabase.auth.getSession();
-            const user = session?.user;
-            if (!user) return;
-
-            const sessionId = activeSessionId;
-            const timestamp = new Date().toISOString();
-
-            // Use axios to upload PDFs
-            const formData = new FormData();
-            for (let i = 0; i < files.length; i++) {
-                formData.append('files', files[i]);
-            }
-
             try {
-                // Call the backend API to upload PDFs
-                const response = await axios.post(`https://ai-doc-assist-chatbot.onrender.com/add_pdf/${sessionId}`, formData, {
-                    headers: {
-                        'Content-Type': 'multipart/form-data'
-                    }
+                // Get the current user's session
+                const { data: { session } } = await supabase.auth.getSession();
+                const user = session?.user;
+                if (!user) return;
+
+                // Set session ID and timestamp
+                const sessionId = activeSessionId;
+                const timestamp = new Date().toISOString();
+
+                // Prepare form data for uploading multiple files
+                const formData = new FormData();
+                Array.from(files).forEach((file) => {
+                    formData.append('files', file);
                 });
 
+
+                // Call backend API to upload PDFs
+                const response = await axios.post(
+                    `${process.env.REACT_APP_FASTAPI_BASEURL}add_pdf/${sessionId}`,
+                    formData,
+                    {
+                        headers: {
+                            'Content-Type': 'multipart/form-data'
+                        }
+                    }
+                );
+
+                // Handle response from the backend
                 if (response.status === 200) {
                     const result = response.data;
 
-                    // Update session documents with PDF names
+                    // Update sessions with new document IDs
                     const updatedSessions = sessions.map(session =>
-                        session.session_id === sessionId ? { ...session, document_ids: result.documentIds } : session
+                        session.session_id === sessionId
+                            ? { ...session, document_ids: result.documentIds }
+                            : session
                     );
                     setSessions(updatedSessions); // Update the sessions state
 
-                    // Show success toast notification
+                    // Show success notification
                     toast.success("PDFs uploaded successfully!");
 
                     // Close the upload modal
                     setShowUploadModal(false);
 
-                    // Update session's last_updated timestamp
+                    // Update session's last_updated timestamp in Supabase
                     await supabase
                         .from('sessions')
                         .update({ last_updated: timestamp })
                         .eq('session_id', sessionId);
 
                 } else {
-                    throw new Error("Failed to upload PDFs");
+                    // Handle unexpected response
+                    console.error("Failed to upload PDFs: Unexpected response status");
+                    toast.error("Failed to upload PDFs. Please try again.");
                 }
             } catch (error) {
                 console.error('Error uploading PDFs:', error);
@@ -180,6 +234,8 @@ const ChatPage = () => {
             }
         }
     };
+
+
 
     const handleSendMessage = async (e) => {
         e.preventDefault();
@@ -206,7 +262,8 @@ const ChatPage = () => {
 
         try {
             // Send user message to the backend API
-            const response = await axios.post('https://ai-doc-assist-chatbot.onrender.com/chat', {
+            console.log(`${process.env.REACT_APP_FASTAPI_BASEURL}`)
+            const response = await axios.post(`${process.env.REACT_APP_FASTAPI_BASEURL}chat`, {
                 session_id: activeSessionId,
                 text: inputMessage,
             });
@@ -255,7 +312,10 @@ const ChatPage = () => {
                 setSidebarOpen={setSidebarOpen}
                 chats={sessions} // Replace 'sessions' with 'chats' prop
                 activeChat={activeSessionId}
-                setActiveChat={setActiveSessionId}
+                setActiveChat={(sessionId) => {
+                    setActiveSessionId(sessionId);
+                    fetchMessagesForSession(sessionId);
+                }}
                 handleNewChat={handleNewChat}
                 handleDeleteChat={handleDeleteChat}
                 fetchMessagesForSession={fetchMessagesForSession}
@@ -271,6 +331,7 @@ const ChatPage = () => {
                         handleSendMessage={handleSendMessage}
                         isLoading={isLoading}
                         setSidebarOpen={setSidebarOpen}
+
                     />
                 ) : (
                     <div className="flex-1 flex items-center justify-center text-gray-500">
