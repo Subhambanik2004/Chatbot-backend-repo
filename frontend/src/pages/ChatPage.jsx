@@ -189,9 +189,8 @@ const ChatPage = () => {
 
 
                 console.log(`${process.env.REACT_APP_FASTAPI_BASEURL}`);
-                // Call backend API to upload PDFs
                 const response = await axios.post(
-                    `${process.env.REACT_APP_FASTAPI_BASEURL}add_pdf/${sessionId}`,
+                    `${process.env.REACT_APP_FASTAPI_BASEURL}/add_pdf/${sessionId}`,
                     formData,
                     {
                         headers: {
