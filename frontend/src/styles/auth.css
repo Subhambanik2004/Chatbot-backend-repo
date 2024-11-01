@@ -1,0 +1,167 @@
+/* Container styling */
+.auth-container {
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(to bottom right, #845ec2, #d65db1, #ff6f91);
+    padding: 0;
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Box with smooth entry animation */
+.auth-box {
+    background-color: white;
+    padding: 2rem;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+    animation: fadeIn 1s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Title and subtitle */
+.auth-title {
+    font-size: 2.2rem;
+    color: #4a4a4a;
+    margin-bottom: 1rem;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), -1px -1px 2px rgba(255, 255, 255, 0.7);
+}
+
+.auth-subtitle {
+    font-size: 1rem;
+    color: #757575;
+    margin-bottom: 2rem;
+}
+
+/* Input fields with focus animations */
+.auth-fields input {
+    width: 90%;
+    padding: 0.85rem;
+    margin-bottom: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.3s;
+}
+
+.auth-fields input:focus {
+    border-color: #845ec2;
+    outline: none;
+}
+
+/* Button styles with hover animations */
+.auth-button {
+    width: 60%;
+    padding: 0.75rem;
+    background-color: #845ec2;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background-color 0.3s ease;
+}
+
+.auth-button:hover {
+    background-color: #6d4ca0;
+}
+
+/* Google button with icon */
+.auth-google-button {
+    margin-top: 1rem;
+    width: 100%;
+    padding: 0.75rem;
+    background-color: #f5f5f5;
+    color: #757575;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: background-color 0.3s ease;
+}
+
+.auth-google-button:hover {
+    background-color: #e0e0e0;
+}
+
+/* Divider with lines */
+.auth-divider {
+    text-align: center;
+    margin: 1.5rem 0;
+    color: #757575;
+    font-size: 0.875rem;
+    position: relative;
+}
+
+.auth-divider span {
+    background-color: white;
+    padding: 0 10px;
+    position: relative;
+    z-index: 2;
+}
+
+.auth-divider::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: #ddd;
+    z-index: 1;
+}
+
+/* Switch links with animation */
+.auth-switch-link {
+    background: none;
+    border: none;
+    color: #845ec2;
+    cursor: pointer;
+    font-size: 0.95rem;
+    margin-top: 1.5rem;
+    transition: color 0.3s ease;
+}
+
+.auth-switch-link:hover {
+    color: #6d4ca0;
+    text-decoration: underline;
+}
+
+.auth-switch-container {
+    margin-top: 1.5rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .auth-box {
+        padding: 1.5rem;
+        max-width: 100%;
+    }
+
+    .auth-title {
+        font-size: 1.8rem;
+    }
+
+    .auth-button {
+        width: 80%;
+    }
+
+    .auth-fields input {
+        width: 95%;
+    }
+}

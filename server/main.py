@@ -2,7 +2,7 @@ import uvicorn
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .api import router as api_router  # Import the router from api.py
+from api import router as api_router  # Import the router from api.py
 
 # Initialize logging
 logging.basicConfig(level=logging.DEBUG)
