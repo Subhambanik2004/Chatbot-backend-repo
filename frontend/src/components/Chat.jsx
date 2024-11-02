@@ -17,9 +17,13 @@ const Chat = ({ messages, inputMessage, setInputMessage, handleSendMessage, setS
                 {/* Message Display */}
                 {messages.map(message => (
                     <div key={message.id} className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[70%] p-3 rounded-lg shadow ${message.isUser ? 'bg-indigo-500 text-white' : 'bg-white text-gray-800 border border-gray-200'}`}>
-                            {message.text}
-                        </div>
+                        <div
+                            className={`max-w-[70%] p-3 rounded-lg shadow ${message.isUser ? 'bg-indigo-500 text-white' : 'bg-white text-gray-800 border border-gray-200'
+                                }`}
+                            dangerouslySetInnerHTML={{
+                                __html: message.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                            }}
+                        ></div>
                     </div>
                 ))}
             </main>
