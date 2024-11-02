@@ -260,7 +260,7 @@ const ChatPage = () => {
 
         try {
             // Send user message to the backend API
-            console.log(`${process.env.REACT_APP_FASTAPI_BASEURL}`)
+            console.log(`${process.env.REACT_APP_FASTAPI_BASEURL}chat`)
             const response = await axios.post(`${process.env.REACT_APP_FASTAPI_BASEURL}chat`, {
                 session_id: activeSessionId,
                 text: inputMessage,
