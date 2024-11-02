@@ -187,10 +187,7 @@ const ChatPage = () => {
                     formData.append('files', file);
                 });
 
-
-                console.log("API Base URL:", process.env.REACT_APP_FASTAPI_BASEURL);
-                console.log(`${import.meta.env.REACT_APP_FASTAPI_BASEURL}add_pdf/${sessionId}`);
-                const response = await axios.post(`${process.env.REACT_APP_FASTAPI_BASEURL}/add_pdf/${sessionId}`,
+                const response = await axios.post(`${process.env.REACT_APP_FASTAPI_BASEURL}add_pdf/${sessionId}`,
                     formData,
                     {
                         headers: {
