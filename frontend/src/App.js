@@ -7,6 +7,7 @@ import AuthPage from '../src/pages/AuthPage';
 import ChatPage from '../src/pages/ChatPage';
 import ProtectedRoute from '../src/components/ProtectedRoute';
 function App() {
+  console.log(`${process.env.REACT_APP_FASTAPI_BASEURL}`);
   return (
     <Provider store={store}> {/* Wrap with Redux store */}
       <Router>
