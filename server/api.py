@@ -58,78 +58,6 @@ async def read_root() -> dict:
     }
 
 
-# @router.post("/session", response_model=Session)
-# async def create_session(email_id: str = Body(..., embed=True)) -> JSONResponse:
-#     """Creates a new chat session."""
-#     try:
-#         session_id: str = str(uuid.uuid4())
-#         timestamp: str = datetime.utcnow().isoformat()
-
-#         response = (
-#             supabase.table("sessions")
-#             .insert(
-#                 {
-#                     "session_id": session_id,
-#                     "started_at": timestamp,
-#                     "last_updated": timestamp,
-#                     "email_id": email_id,
-#                     "document_ids": [],  # Initialize with an empty list
-#                 }
-#             )
-#             .execute()
-#         )
-
-#         if not response.data:
-#             raise HTTPException(status_code=500, detail="Failed to create session.")
-
-#         new_session: dict = {
-#             "session_id": session_id,
-#             "email_id": email_id,
-#             "started_at": timestamp,
-#         }
-
-#         return JSONResponse(content=new_session, status_code=200)
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-
-
-# @router.get("/sessions/{email_id}", response_model=List[Session])
-# async def get_sessions(email_id: str) -> JSONResponse:
-#     """Fetches all sessions for a given email ID, with document summary if available."""
-#     try:
-#         response = (
-#             supabase.table("sessions")
-#             .select("session_id, started_at, document_ids")
-#             .eq("email_id", email_id)
-#             .execute()
-#         )
-#         sessions = response.data
-
-#         for session in sessions:
-#             if session.get("document_ids"):
-#                 # Fetch document metadata to display as the session name
-#                 doc_ids = session["document_ids"]
-#                 descriptions = []
-#                 for doc_id in doc_ids:
-#                     doc_response = (
-#                         supabase.table("documents")
-#                         .select("metadata")
-#                         .eq("id", doc_id)
-#                         .execute()
-#                     )
-#                     if doc_response.data:
-#                         metadata = doc_response.data[0]["metadata"]
-#                         descriptions.append(metadata.get("filename", "Unnamed PDF"))
-#                 session["pdf_descriptions"] = ", ".join(descriptions)
-
-#         if not sessions:
-#             raise HTTPException(status_code=404, detail="No sessions found.")
-
-#         return JSONResponse(content=sessions, status_code=200)
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.post("/chat")
 async def chat(request: chat_schema) -> dict:
     """Handles chat requests and generates responses from the language model."""
@@ -333,24 +261,6 @@ async def internal_query_pdf(query: str, session_id: str) -> List[str]:
         return []
 
 
-# @router.get("/history/{session_id}")
-# async def get_history(session_id: str) -> list:
-#     """Fetches the chat history for a given session ID."""
-#     try:
-#         logging.info(f"Fetching history for session_id: {session_id}")
-#         response = (
-#             supabase.table("chat_history")
-#             .select("message, role, timestamp")
-#             .eq("session_id", session_id)
-#             .order("timestamp")
-#             .execute()
-#         )
-#         return response.data if response.data else []
-#     except Exception as e:
-#         logging.critical(f"Error fetching history: {str(e)}")
-#         return []
-
-
 @router.post("/add_pdf/{session_id}")
 async def add_pdf(session_id: str, files: List[UploadFile] = File(...)) -> dict:
     """Handles multiple PDF file uploads and associates the files with a session."""
@@ -433,6 +343,95 @@ def get_embedding(document_content: str) -> List[float]:
     embedding = embeddings_model.embed_documents([document_content])[0]
 
     return embedding
+
+
+# @router.get("/history/{session_id}")
+# async def get_history(session_id: str) -> list:
+#     """Fetches the chat history for a given session ID."""
+#     try:
+#         logging.info(f"Fetching history for session_id: {session_id}")
+#         response = (
+#             supabase.table("chat_history")
+#             .select("message, role, timestamp")
+#             .eq("session_id", session_id)
+#             .order("timestamp")
+#             .execute()
+#         )
+#         return response.data if response.data else []
+#     except Exception as e:
+#         logging.critical(f"Error fetching history: {str(e)}")
+#         return []
+
+# @router.post("/session", response_model=Session)
+# async def create_session(email_id: str = Body(..., embed=True)) -> JSONResponse:
+#     """Creates a new chat session."""
+#     try:
+#         session_id: str = str(uuid.uuid4())
+#         timestamp: str = datetime.utcnow().isoformat()
+
+#         response = (
+#             supabase.table("sessions")
+#             .insert(
+#                 {
+#                     "session_id": session_id,
+#                     "started_at": timestamp,
+#                     "last_updated": timestamp,
+#                     "email_id": email_id,
+#                     "document_ids": [],  # Initialize with an empty list
+#                 }
+#             )
+#             .execute()
+#         )
+
+#         if not response.data:
+#             raise HTTPException(status_code=500, detail="Failed to create session.")
+
+#         new_session: dict = {
+#             "session_id": session_id,
+#             "email_id": email_id,
+#             "started_at": timestamp,
+#         }
+
+#         return JSONResponse(content=new_session, status_code=200)
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
+
+
+# @router.get("/sessions/{email_id}", response_model=List[Session])
+# async def get_sessions(email_id: str) -> JSONResponse:
+#     """Fetches all sessions for a given email ID, with document summary if available."""
+#     try:
+#         response = (
+#             supabase.table("sessions")
+#             .select("session_id, started_at, document_ids")
+#             .eq("email_id", email_id)
+#             .execute()
+#         )
+#         sessions = response.data
+
+#         for session in sessions:
+#             if session.get("document_ids"):
+#                 # Fetch document metadata to display as the session name
+#                 doc_ids = session["document_ids"]
+#                 descriptions = []
+#                 for doc_id in doc_ids:
+#                     doc_response = (
+#                         supabase.table("documents")
+#                         .select("metadata")
+#                         .eq("id", doc_id)
+#                         .execute()
+#                     )
+#                     if doc_response.data:
+#                         metadata = doc_response.data[0]["metadata"]
+#                         descriptions.append(metadata.get("filename", "Unnamed PDF"))
+#                 session["pdf_descriptions"] = ", ".join(descriptions)
+
+#         if not sessions:
+#             raise HTTPException(status_code=404, detail="No sessions found.")
+
+#         return JSONResponse(content=sessions, status_code=200)
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
 # async def query_pdf(session_id: str, query: str) -> dict:

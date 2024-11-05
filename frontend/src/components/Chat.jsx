@@ -4,14 +4,18 @@ const Chat = ({ messages, inputMessage, setInputMessage, handleSendMessage, setS
     return (
         <div className="flex-1 flex flex-col overflow-hidden bg-gray-50">
             {/* Header Section */}
-            <header className="bg-white shadow-md p-4 flex items-center justify-between md:justify-end">
+            <header className="bg-white shadow-md p-4 flex items-center justify-between">
+                {/* Button visible on mobile (md:hidden means it will be hidden on screens larger than md) */}
                 <button onClick={() => setSidebarOpen(true)} className="md:hidden">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
                 </button>
-                <h2 className="text-xl font-bold text-indigo-900">Chat with PDF</h2>
+
+                {/* Header title, centered on mobile, aligned to the right on larger screens */}
+                <h2 className="text-xl font-bold text-indigo-900 mx-auto md:mx-0">Chat with PDF</h2>
             </header>
+
 
             <main className="flex-1 overflow-y-auto p-4 space-y-4">
                 {/* Message Display */}
