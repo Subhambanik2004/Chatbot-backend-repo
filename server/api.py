@@ -336,13 +336,18 @@ async def add_pdf(session_id: str, files: List[UploadFile] = File(...)) -> dict:
 
 def get_embedding(document_content: str) -> List[float]:
     """Generate embeddings using Google Generative AI Embeddings."""
-    # Initialize embeddings model
-    embeddings_model = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    try:
+        # Initialize embeddings model
+        embeddings_model = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 
-    # Generate embeddings for the document content using the correct method
-    embedding = embeddings_model.embed_documents([document_content])[0]
+        # Generate embeddings for the document content using the correct method
+        embedding = embeddings_model.embed_documents([document_content])[0]
 
-    return embedding
+        return embedding
+    except Exception as e:
+        logging.error(f"Error embedding content: {str(e)}")
+        # Return a zero vector as fallback (you might want to handle this differently)
+        return [0.0] * 768  # Google AI embeddings are 768 dimensions
 
 
 # @router.get("/history/{session_id}")

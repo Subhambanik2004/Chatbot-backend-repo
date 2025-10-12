@@ -38,13 +38,11 @@ const AuthPage = () => {
         try {
             const { data, error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
+                options: {
+                    redirectTo: `${window.location.origin}/chat`
+                }
             });
             if (error) throw error;
-            if (data) {
-                const { user } = data;
-                dispatch(setUser(user)); // Dispatch user data to Redux store
-                navigate("/chat"); // Navigate to chat page
-            }
         } catch (error) {
             console.error("Error signing in with Google:", error);
         }
