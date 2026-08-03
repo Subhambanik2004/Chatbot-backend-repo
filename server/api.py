@@ -38,7 +38,7 @@ google_api_key: str = os.getenv("GOOGLE_API_KEY")
 
 # Initialize the language model with a valid API key
 llm: ChatGoogleGenerativeAI = ChatGoogleGenerativeAI(
-    model="models/gemini-1.5-flash", google_api_key=google_api_key
+    model="gemini-flash-latest", google_api_key=google_api_key
 )
 
 # Define the prompt template
@@ -309,6 +309,12 @@ async def add_pdf(session_id: str, files: List[UploadFile] = File(...)) -> dict:
             .eq("session_id", session_id)
             .execute()
         )
+        logging.info("========== SESSION RESPONSE ==========")
+        logging.info(session_response.data)
+        logging.info(type(session_response.data))
+        logging.info("======================================")
+        if len(session_response.data) == 0:
+            raise Exception("Session query returned empty list")
         existing_document_ids = session_response.data[0]["document_ids"]
 
         # Append the new document IDs to the existing document_ids array
@@ -326,6 +332,7 @@ async def add_pdf(session_id: str, files: List[UploadFile] = File(...)) -> dict:
             .eq("session_id", session_id)
             .execute()
         )
+        logging.info(f"Update response: {update_response.data}")
 
         return {"message": "PDFs uploaded and processed successfully"}
     except Exception as e:
@@ -338,7 +345,10 @@ def get_embedding(document_content: str) -> List[float]:
     """Generate embeddings using Google Generative AI Embeddings."""
     try:
         # Initialize embeddings model
-        embeddings_model = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+        embeddings_model = GoogleGenerativeAIEmbeddings(
+            model="gemini-embedding-001",
+            google_api_key=google_api_key
+        )
 
         # Generate embeddings for the document content using the correct method
         embedding = embeddings_model.embed_documents([document_content])[0]
@@ -347,7 +357,7 @@ def get_embedding(document_content: str) -> List[float]:
     except Exception as e:
         logging.error(f"Error embedding content: {str(e)}")
         # Return a zero vector as fallback (you might want to handle this differently)
-        return [0.0] * 768  # Google AI embeddings are 768 dimensions
+        return [0.0] * 3072 # Google AI embeddings are 768 dimensions
 
 
 # @router.get("/history/{session_id}")
