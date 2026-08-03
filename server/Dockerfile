@@ -1,21 +1,19 @@
-FROM python:3.11.9
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy project files
-COPY . /app
+# Install uv
+RUN pip install uv
 
-# Copy .env explicitly if needed (optional)
-# COPY .env /app/.env
+# Copy dependency files first
+COPY pyproject.toml uv.lock ./
 
-# Update OS packages
-RUN apt update && apt upgrade -y
+# Install dependencies
+RUN uv sync --frozen --no-dev
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy project
+COPY . .
 
-# Expose port (optional)
 EXPOSE 8000
 
-# Run your app
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
