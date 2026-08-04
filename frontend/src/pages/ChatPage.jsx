@@ -322,6 +322,30 @@ const ChatPage = () => {
             <div className="flex-1 flex flex-col min-w-0">
                 <Navbar handleLogout={() => supabase.auth.signOut()} />
 
+                <header className="bg-white/95 backdrop-blur border-b border-gray-200 p-4 flex items-center justify-between sticky top-0 z-10">
+                    <button
+                        onClick={() => setSidebarOpen(true)}
+                        className="md:hidden text-gray-500 hover:text-gray-700 transition-colors"
+                        aria-label="Open sidebar"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+                    <div className="flex items-center gap-2 mx-auto md:mx-0">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5 text-indigo-600" style={{ height: 18, width: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        </div>
+                        <h2 className="text-lg font-semibold text-gray-900">
+                            {activeSessionId
+                                ? `Chat with ${sessions.find(s => s.session_id === activeSessionId)?.pdf_descriptions || "PDF"}`
+                                : "PDF Chat"}
+                        </h2>
+                    </div>
+                </header>
+
                 {activeSessionId ? (
                     <div className="flex-1 flex flex-col min-h-0 relative">
                         <Chat
@@ -330,9 +354,6 @@ const ChatPage = () => {
                             setInputMessage={setInputMessage}
                             handleSendMessage={handleSendMessage}
                             isLoading={isLoading}
-                            setSidebarOpen={setSidebarOpen}
-                            chats={sessions}
-                            activeChat={activeSessionId}
                         />
 
                         {/* Subtle "assistant is typing" indicator, layered on top so Chat's own layout is untouched */}
