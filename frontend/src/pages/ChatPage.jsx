@@ -237,7 +237,7 @@ const ChatPage = () => {
 
     const handleSendMessage = async (e) => {
         e.preventDefault();
-        if (!inputMessage.trim() || !activeSessionId) return;
+        if (!inputMessage.trim() || !activeSessionId || isLoading) return;
 
         const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user;

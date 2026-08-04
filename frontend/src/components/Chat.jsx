@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Chat = ({ messages, inputMessage, setInputMessage, handleSendMessage, setSidebarOpen }) => {
+const Chat = ({ messages, inputMessage, setInputMessage, handleSendMessage, setSidebarOpen, isLoading }) => {
     return (
         <div className="flex-1 flex flex-col overflow-hidden bg-gray-50">
             <header className="bg-white shadow-md p-4 flex items-center justify-between sticky top-0 z-10">
@@ -27,6 +27,18 @@ const Chat = ({ messages, inputMessage, setInputMessage, handleSendMessage, setS
                         ></div>
                     </div>
                 ))}
+
+                {isLoading && (
+                    <div className="flex justify-start">
+                        <div className="max-w-[70%] px-4 py-3 rounded-lg shadow bg-white text-gray-800 border border-gray-200">
+                            <div className="typing-indicator" aria-label="Waiting for response">
+                                <span />
+                                <span />
+                                <span />
+                            </div>
+                        </div>
+                    </div>
+                )}
             </main>
 
             <footer className="bg-white shadow-md p-4">
@@ -36,9 +48,14 @@ const Chat = ({ messages, inputMessage, setInputMessage, handleSendMessage, setS
                         value={inputMessage}
                         onChange={(e) => setInputMessage(e.target.value)}
                         placeholder="Type your message..."
-                        className="flex-1 p-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        disabled={isLoading}
+                        className="flex-1 p-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
-                    <button type="submit" className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center ml-2">
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center ml-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12H4m0 0l8-8m-8 8l8 8" />
                         </svg>
