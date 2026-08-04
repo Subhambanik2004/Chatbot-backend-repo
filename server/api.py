@@ -1,18 +1,18 @@
-from itertools import chain
+import ast
+import asyncio
 import os
 import tempfile
 import uuid
 import logging
 import traceback
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 
-
-from fastapi import APIRouter, Form, HTTPException, Body, File, UploadFile
+from fastapi import APIRouter, HTTPException, File, UploadFile
 from fastapi.responses import JSONResponse
 
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain.memory import ConversationSummaryMemory
+from langchain.memory import ConversationBufferWindowMemory
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 from langchain_community.document_loaders import PyPDFLoader
@@ -20,8 +20,7 @@ from langchain_community.chat_message_histories import PostgresChatMessageHistor
 import numpy as np
 
 from database import supabase
-from schemas import Message, chat_schema, Session
-from utils import simulate_ai_processing_time
+from schemas import chat_schema
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -41,9 +40,15 @@ llm: ChatGoogleGenerativeAI = ChatGoogleGenerativeAI(
     model="gemini-flash-latest", google_api_key=google_api_key
 )
 
+embeddings_model: GoogleGenerativeAIEmbeddings = GoogleGenerativeAIEmbeddings(
+    model="gemini-embedding-001",
+    google_api_key=google_api_key,
+)
+
 # Define the prompt template
 prompt: PromptTemplate = PromptTemplate(
-    input_variables=["human_message"], template="Human: {human_message}\nAI:"
+    input_variables=["history", "human_message"],
+    template="{history}\nHuman: {human_message}\nAI:",
 )
 
 # Setup PostgresChatMessageHistory
@@ -72,55 +77,42 @@ async def chat(request: chat_schema) -> dict:
             connection_string=connection_string, session_id=session_id
         )
 
-        # Initialize ConversationSummaryMemory with the LLM
-        memory: ConversationSummaryMemory = get_summary_memory(
-            llm=llm, chat_memory=chat_history
+        memory: ConversationBufferWindowMemory = get_chat_memory(
+            chat_memory=chat_history
         )
 
-        # Add the user message to memory
         memory.chat_memory.add_user_message(request.text)
 
-        # Determine if the PDFs are relevant to the question
-        is_related_to_pdfs = await should_query_pdfs(request.text, session_id)
+        pdf_responses = await internal_query_pdf(request.text, session_id)
+        vector_store_used = bool(pdf_responses)
 
-        if is_related_to_pdfs:
-            # Directly call the query_pdf function to get relevant content
-            pdf_responses = await internal_query_pdf(request.text, session_id)
+        if vector_store_used:
             context = "\n\n".join(pdf_responses)
             prompt_template = get_pdf_aware_prompt_template()
-            vector_store_used = True
         else:
-            context = ""  # No relevant PDF content
-            prompt_template = prompt  # Use the general prompt
-            vector_store_used = False
+            context = ""
+            prompt_template = prompt
 
-        # Generate a response using the appropriate prompt template
         chain = get_llm_chain(llm, memory, prompt_template)
 
-        ai_response = chain.run(
+        result = await chain.ainvoke(
             {
                 "human_message": request.text,
                 "context": context,
                 "vector_store_used": vector_store_used,
             }
         )
+        ai_response = result["text"] if isinstance(result, dict) else str(result)
 
         logging.info(f"Model response: {ai_response}")
 
-        # Add the AI's response to memory
         memory.chat_memory.add_ai_message(ai_response)
 
-        # Store chat history in Supabase
+        # Frontend already persists the user message; store only the AI reply
         response = (
             supabase.table("chat_history")
             .insert(
                 [
-                    {
-                        "session_id": session_id,
-                        "message": request.text,
-                        "role": "human",
-                        "timestamp": datetime.utcnow().isoformat(),
-                    },
                     {
                         "session_id": session_id,
                         "message": ai_response,
@@ -157,21 +149,23 @@ async def chat(request: chat_schema) -> dict:
     # Define the prompt template for when PDF content is relevant
 
 
-def get_summary_memory(
-    llm: ChatGoogleGenerativeAI,
+def get_chat_memory(
     chat_memory: PostgresChatMessageHistory,
     memory_key: str = "history",
     input_key: str = "human_message",
-) -> ConversationSummaryMemory:
-    """Returns a ConversationSummaryMemory instance."""
-    return ConversationSummaryMemory(
-        llm=llm, memory_key=memory_key, input_key=input_key, chat_memory=chat_memory
+) -> ConversationBufferWindowMemory:
+    """Returns a windowed conversation memory (no extra LLM summarization calls)."""
+    return ConversationBufferWindowMemory(
+        k=10,
+        memory_key=memory_key,
+        input_key=input_key,
+        chat_memory=chat_memory,
     )
 
 
 def get_llm_chain(
     llm: ChatGoogleGenerativeAI,
-    memory: ConversationSummaryMemory,
+    memory: ConversationBufferWindowMemory,
     prompt: PromptTemplate,
     verbose: bool = False,
 ) -> LLMChain:
@@ -179,19 +173,11 @@ def get_llm_chain(
     return LLMChain(llm=llm, memory=memory, verbose=verbose, prompt=prompt)
 
 
-async def should_query_pdfs(message: str, session_id: str) -> bool:
-    pdf_response = await internal_query_pdf(message, session_id)
-    logging.info(f"PDF query response: {pdf_response}")
-
-    return (
-        bool(pdf_response)
-        and pdf_response[0] != "No relevant information found in the documents."
-    )
-
-
 def get_pdf_aware_prompt_template() -> PromptTemplate:
     return PromptTemplate(
+        input_variables=["history", "human_message", "context", "vector_store_used"],
         template=(
+            "{history}\n"
             "You are an assistant, answer the following query.\n"
             "Context from documents: ## {context} ##\n"
             "Query: {human_message}\n"
@@ -212,14 +198,11 @@ async def internal_query_pdf(query: str, session_id: str) -> List[str]:
         )
 
         if not session_response.data:
-            raise HTTPException(status_code=404, detail="Session not found.")
+            return []
 
         document_ids = session_response.data[0]["document_ids"]
-
         if not document_ids:
-            raise HTTPException(
-                status_code=404, detail="No documents found for the session."
-            )
+            return []
 
         documents_response = (
             supabase.table("documents")
@@ -229,31 +212,26 @@ async def internal_query_pdf(query: str, session_id: str) -> List[str]:
         )
 
         if not documents_response.data:
-            raise HTTPException(status_code=404, detail="No documents found.")
+            return []
 
-        query_embedding = np.array(get_embedding(query), dtype=np.float32)
+        query_embedding = np.array(
+            await asyncio.to_thread(get_query_embedding, query), dtype=np.float32
+        )
 
         relevant_responses = []
         for document in documents_response.data:
-            import ast  # Add this import for `literal_eval`
-
             document_embedding = np.array(
                 ast.literal_eval(document["embedding"]), dtype=np.float32
-            )  # Updated line
+            )
             similarity = np.dot(query_embedding, document_embedding)
 
-            # Log similarity for debugging
-            logging.info(f"Query: {query}")
-            logging.info(
-                f"Similarity score: {similarity} for document: {document['content']}"
-            )
-
-            if similarity > 0.5:  # Adjust as needed
+            if similarity > 0.5:
                 relevant_responses.append(document["content"])
 
-        if not relevant_responses:
-            return []
-
+        logging.info(
+            f"PDF search for session {session_id}: "
+            f"{len(relevant_responses)}/{len(documents_response.data)} matches"
+        )
         return relevant_responses
 
     except Exception as e:
@@ -341,23 +319,22 @@ async def add_pdf(session_id: str, files: List[UploadFile] = File(...)) -> dict:
         return JSONResponse(content=error_message, status_code=500)
 
 
-def get_embedding(document_content: str) -> List[float]:
-    """Generate embeddings using Google Generative AI Embeddings."""
+def get_query_embedding(query: str) -> List[float]:
+    """Generate an embedding for a search query."""
     try:
-        # Initialize embeddings model
-        embeddings_model = GoogleGenerativeAIEmbeddings(
-            model="gemini-embedding-001",
-            google_api_key=google_api_key
-        )
+        return embeddings_model.embed_query(query)
+    except Exception as e:
+        logging.error(f"Error embedding query: {str(e)}")
+        return [0.0] * 3072
 
-        # Generate embeddings for the document content using the correct method
-        embedding = embeddings_model.embed_documents([document_content])[0]
 
-        return embedding
+def get_embedding(document_content: str) -> List[float]:
+    """Generate embeddings for document content."""
+    try:
+        return embeddings_model.embed_documents([document_content])[0]
     except Exception as e:
         logging.error(f"Error embedding content: {str(e)}")
-        # Return a zero vector as fallback (you might want to handle this differently)
-        return [0.0] * 3072 # Google AI embeddings are 768 dimensions
+        return [0.0] * 3072
 
 
 # @router.get("/history/{session_id}")
