@@ -1,12 +1,24 @@
 import React, { useEffect, useRef } from 'react';
 
-const Chat = ({ messages, inputMessage, setInputMessage, handleSendMessage, setSidebarOpen, isLoading }) => {
+const Chat = ({
+    messages,
+    inputMessage,
+    setInputMessage,
+    handleSendMessage,
+    setSidebarOpen,
+    isLoading,
+    activeChat,
+    chats
+}) => {
     const bottomRef = useRef(null);
 
     // Keep the latest message in view as the conversation grows
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }, [messages, isLoading]);
+    const currentChat = chats.find(
+        chat => chat.session_id === activeChat
+    );
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden bg-gray-50">
@@ -26,7 +38,9 @@ const Chat = ({ messages, inputMessage, setInputMessage, handleSendMessage, setS
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                     </div>
-                    <h2 className="text-lg font-semibold text-gray-900">Chat with PDF</h2>
+                    <h2 className="text-lg font-semibold text-gray-900">
+                        Chat with {currentChat?.pdf_descriptions || "PDF"}
+                    </h2>
                 </div>
             </header>
 

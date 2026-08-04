@@ -331,6 +331,8 @@ const ChatPage = () => {
                             handleSendMessage={handleSendMessage}
                             isLoading={isLoading}
                             setSidebarOpen={setSidebarOpen}
+                            chats={chats}
+                            activeChat={activeChat}
                         />
 
                         {/* Subtle "assistant is typing" indicator, layered on top so Chat's own layout is untouched */}
