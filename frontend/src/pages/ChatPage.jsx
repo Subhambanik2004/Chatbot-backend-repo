@@ -303,7 +303,7 @@ const ChatPage = () => {
     };
 
     return (
-        <div className="flex h-screen">
+        <div className="flex h-screen bg-slate-50 text-slate-900">
             <Sidebar
                 sidebarRef={sidebarRef}
                 sidebarOpen={sidebarOpen}
@@ -319,23 +319,72 @@ const ChatPage = () => {
                 fetchMessagesForSession={fetchMessagesForSession}
             />
 
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col min-w-0">
                 <Navbar handleLogout={() => supabase.auth.signOut()} />
-                {activeSessionId ? (
-                    <Chat
-                        messages={messages}
-                        inputMessage={inputMessage}
-                        setInputMessage={setInputMessage}
-                        handleSendMessage={handleSendMessage}
-                        isLoading={isLoading}
-                        setSidebarOpen={setSidebarOpen}
 
-                    />
+                {activeSessionId ? (
+                    <div className="flex-1 flex flex-col min-h-0 relative">
+                        <Chat
+                            messages={messages}
+                            inputMessage={inputMessage}
+                            setInputMessage={setInputMessage}
+                            handleSendMessage={handleSendMessage}
+                            isLoading={isLoading}
+                            setSidebarOpen={setSidebarOpen}
+                        />
+
+                        {/* Subtle "assistant is typing" indicator, layered on top so Chat's own layout is untouched */}
+                        {isLoading && (
+                            <div className="pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2">
+                                <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-4 py-2 shadow-md backdrop-blur">
+                                    <span className="flex gap-1">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]"></span>
+                                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s]"></span>
+                                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce"></span>
+                                    </span>
+                                    <span className="text-xs font-medium text-slate-500">Thinking…</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 ) : (
-                    <div className="flex-1 flex items-center justify-center text-gray-500">
-                        Select or create a chat to start messaging
+                    <div className="flex-1 flex items-center justify-center px-6">
+                        <div className="flex flex-col items-center text-center max-w-sm">
+                            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 border border-indigo-100 mb-5">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="h-8 w-8 text-indigo-500"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={1.5}
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8-1.05 0-2.058-.16-3-.457L3 21l1.512-4.032C3.55 15.658 3 13.895 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                                    />
+                                </svg>
+                            </div>
+                            <h2 className="text-lg font-semibold text-slate-800">
+                                No chat selected
+                            </h2>
+                            <p className="mt-1.5 text-sm text-slate-500">
+                                Pick a conversation from the sidebar, or start a new one to upload a PDF and begin chatting.
+                            </p>
+                            <button
+                                onClick={handleNewChat}
+                                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                </svg>
+                                Start new chat
+                            </button>
+                        </div>
                     </div>
                 )}
+
                 <UploadModal
                     showUploadModal={showUploadModal}
                     setShowUploadModal={setShowUploadModal}
